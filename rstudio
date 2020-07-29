@@ -53,7 +53,7 @@ list(){
 
 
 rstudio_passwd(){
-  "$thisdir/cexec" rstudio-passwd | tail -n1 > "$thisdir/.rstudio-passwd"
+  singularity run --app rstudio_passwd "$CONTAINER"
 }
 
 make_temp(){
@@ -103,7 +103,7 @@ EOF
   tmpdir="$(make_temp)"
   
   #port=$("$thisdir/cexec" find_port "$host" "$port_min" "$port_max")
-  port=$("$thisdir/find_port" "$host" "$port_min" "$port_max")
+  port=$(singularity -s exec "$CONTAINER" /usr/bin/find_port "$host" "$port_min" "$port_max")
   msg ""
   msg "Access RStudio Server on http://$host:$port"
   msg ""
