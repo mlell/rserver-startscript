@@ -44,9 +44,12 @@ list(){
   for f in "${pidfiles[@]}"; do
     { read PID; read instancename; read address; read hostname; } < "$f"
     defunct=""
-    if ! kill -s 0 "$PID" 2>/dev/null; then defunct="(PID MISSING)"; fi
-    x="$(singularity instance list "$instancename" | wc -l)"
-    if [ "$x" -lt 2 ]; then defunct="(INSTANCE MISSING)"; fi
+    # If the instance runs on this machine, test if it is functional
+    if [ "$(uname -n)" = "$hostname" ]; then
+      if ! kill -s 0 "$PID" 2>/dev/null; then defunct="(PID MISSING)"; fi
+      x="$(singularity instance list "$instancename" | wc -l)"
+      if [ "$x" -lt 2 ]; then defunct="(INSTANCE MISSING)"; fi
+    fi
     printf "$fmt" "$PID" "$instancename" "$address" "$hostname" "$defunct"
   done
 }
