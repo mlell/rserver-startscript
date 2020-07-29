@@ -17,7 +17,7 @@ exit 0
 fi
 
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
-container="rserver_200403.sif"
+container="rstudio_1.3.1056_200729.sif"
 
 
 singularity exec \
