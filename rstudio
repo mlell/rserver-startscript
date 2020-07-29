@@ -53,7 +53,7 @@ list(){
 
 
 rstudio_passwd(){
-  singularity run --app rstudio_passwd "$CONTAINER"
+  "$thisdir/cexec" /usr/lib/rstudio-server/bin/rstudio_passwd "$@"
 }
 
 make_temp(){
