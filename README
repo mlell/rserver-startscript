@@ -51,6 +51,8 @@ the project folder and type
 
     ./cexec R
 
+Again, do not forget that R sees your project files under the path `/proj`.
+
 Execute R scripts
 =================
 
