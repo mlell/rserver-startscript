@@ -7,7 +7,7 @@ CONTAINER="$thisdir/../rstudio_1.3.1056_200729.sif"
 MOUNT_PROJECT="/proj"
 DIR_RUN="$thisdir/.run"
 
-host="127.0.0.1"
+address="127.0.0.1"
 port_min=8000
 port_max=8100
 
@@ -39,15 +39,15 @@ list(){
     msg "No RStudio sessions running in this directory."
     return 0
   fi
-  local fmt="%6s %16s %20s %s\n"
-  printf "$fmt" "PID" "instance" "address" ""
+  local fmt="%6s %16s %20s %20s %s\n"
+  printf "$fmt" "PID" "instance" "address" "hostname" ""
   for f in "${pidfiles[@]}"; do
-    { read PID; read instancename; read address; } < "$f"
+    { read PID; read instancename; read address; read hostname; } < "$f"
     defunct=""
     if ! kill -s 0 "$PID" 2>/dev/null; then defunct="(PID MISSING)"; fi
     x="$(singularity instance list "$instancename" | wc -l)"
     if [ "$x" -lt 2 ]; then defunct="(INSTANCE MISSING)"; fi
-    printf "$fmt" "$PID" "$instancename" "$address" "$defunct"
+    printf "$fmt" "$PID" "$instancename" "$address" "$hostname" "$defunct"
   done
 }
 
@@ -102,10 +102,10 @@ EOF
   # Create a temporary directory
   tmpdir="$(make_temp)"
   
-  #port=$("$thisdir/cexec" find_port "$host" "$port_min" "$port_max")
-  port=$(singularity -s exec "$CONTAINER" /usr/bin/find_port "$host" "$port_min" "$port_max")
+  #port=$("$thisdir/cexec" find_port "$address" "$port_min" "$port_max")
+  port=$(singularity -s exec "$CONTAINER" /usr/bin/find_port "$address" "$port_min" "$port_max")
   msg ""
-  msg "Access RStudio Server on http://$host:$port"
+  msg "Access RStudio Server on http://$address:$port"
   msg ""
   msg "To log in to RStudio, use your user name and the"
   msg "RStudio password for this project."
@@ -137,10 +137,12 @@ EOF
     
     # Save PID and other infos
     pid=$BASHPID
+    hostname="$(uname -n)"
     cat <<EOF >"$runfile"
 $pid
 $instancename
-$host:$port
+$address:$port
+$hostname
 EOF
   
     # log error code
@@ -151,7 +153,7 @@ EOF
       --pwd "$MOUNT_PROJECT" \
       "instance://$instancename" \
         rserver \
-        --www-address $host \
+        --www-address $address \
         --www-port $port \
         --auth-none 0 \
         --auth-pam-helper rstudio_auth_file
