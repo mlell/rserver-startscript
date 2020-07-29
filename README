@@ -1,0 +1,89 @@
+First run of the project
+========================
+
+These steps are nessecary when you want to work with this project for the first time:
+
+ 1. Install [Singularity](https://sylabs.io/singularity)
+
+ 2. When using AsReml 3: Copy your asreml.lic file into the project root
+
+ 3. If you are behind a proxy server, create a file named `.Renviron`. On 
+    Windows, take care that the file doesn't get a `.txt` file extension. Save
+	the the needed environment variables. For example, for a HTTP proxy:
+
+        http_proxy="http://proxy.example.com:3128"
+        https_proxy="http://proxy.example.com:3128"
+
+    If you have another proxy, check the cURL manual to see which environment 
+    variables you have to set.
+	
+ 4. To run R in the command line or to run a script, follow the next two 
+    sections. To start RStudio Server, which is useful for developing and
+    debugging, continue with section "First start of RStudio Server".
+
+Start an R session
+==================
+
+Use the script `cexec` to start R. Open a shell, change working directory to
+the project folder and type 
+
+    ./cexec R
+
+Execute R scripts
+=================
+
+The container for this project includes RStudio as well as bare-bone R. 
+Follow the steps in this section if you want to execute R 
+without running RStudio. You don't have to do this if you want to run RStudio 
+and run an R script from there. 
+In RStudio, just use the normal R and Rscript calls. See below on how to prepare
+and start RStudio. 
+ 
+Open a shell. You can run R scripts with the help of `./cexec`, that you find 
+in the same folder as this README. For example, to run an R script called `example.R`:
+
+    ./cexec Rscript example.R
+
+First start of RStudio Server
+=============================
+
+You only have to do this once. You can repeat these steps if you forgot 
+your password for RStudio Server:
+
+ 1. Open a shell and set the working directory to your project folder 
+    
+	    cd /path/to/this/folder
+
+ 2. Set a password for rstudio-server using 
+
+        ./cexec rstudio-passwd > .rstudio-passwd
+    
+	
+Start RStudio
+=============
+
+If you have not done the steps of the previous section "First start of the
+RStudio Server", do that prior to these steps.
+
+ 1. If not done already, open a shell and change the working directory to your 
+    project folder.
+ 
+ 2. (Optional but recommended) Start the `screen` program. This way, RStudio can
+    stay running when you close your terminal window later.
+ 
+ 3. Run `./run-rserver`. A URL is printed to the screen. As long as this 
+    program is running, you can access RStudio by typing this URL into your
+    browser. 
+
+ 4. If you are running screen, to keep RStudio running in the background, 
+    detach from the screen session by typing Ctrl+A, D. See a tutorial about
+	`screen` in the internet for more information about this.
+
+Multiple parallel instances of RServer Studio
+=============================================
+
+Accessing multiple instances of RStudio Server in the same browser leads 
+to problems. You might get logged out of one RStudio when you access the other
+one. Use Add-ons like 
+[Firefox Multi-Account Containers](https://addons.mozilla.org/de/firefox/addon/multi-account-containers/)
+to prevent those.

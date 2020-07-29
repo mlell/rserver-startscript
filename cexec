@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Execute a command in the container
+set -ue
+
+MOUNT_PROJECT="/proj"
+
+if [ "${1-}" = "--help" ]; then 
+echo <<EOF
+Usage: cexec command [args...]
+
+Execute `command` in the container. This script starts the Singularity
+container and executes the given command therein. The project root is mapped 
+to the folder `/proj` inside the container.
+
+EOF
+exit 0
+fi
+
+thisdir="$(dirname "${BASH_SOURCE[0]}")"
+container="rserver_200403.sif"
+
+
+singularity exec \
+  --pwd "$MOUNT_PROJECT" \
+  -H "$thisdir:$MOUNT_PROJECT" \
+  "$container" \
+  "$@"
+
+

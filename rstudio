@@ -1,0 +1,185 @@
+#!/bin/bash
+set -ue
+
+thisdir="$(dirname "${BASH_SOURCE[0]}")"
+
+CONTAINER="$thisdir/rserver_200403.sif"
+MOUNT_PROJECT="/proj"
+DIR_RUN="$thisdir/.run"
+
+host="127.0.0.1"
+port_min=8000
+port_max=8100
+
+help(){
+  cat <<EOF
+Usage rstudio [start|list|passwd]
+
+Manage RStudio Server sessions in this folder.
+
+Commands:
+list   Show the running sessions. This is the default action.
+start  Start a new RStudio server session.
+passwd Set the password to access RStudio.
+
+To stop a running RStudio session, use 'rstudio list' to find the
+PID and then call 'kill PID', (replacing PID)
+EOF
+}
+
+msg(){
+  printf "$@" >&2
+  echo >&2
+}
+
+list(){
+  shopt -s nullglob
+  pidfiles=("$DIR_RUN"/rstudio-*.pid)
+  if [ ${#pidfiles[@]} = 0 ]; then
+    msg "No RStudio sessions running in this directory."
+    return 0
+  fi
+  local fmt="%6s %16s %20s %s\n"
+  printf "$fmt" "PID" "instance" "address" ""
+  for f in "${pidfiles[@]}"; do
+    { read PID; read instancename; read address; } < "$f"
+    defunct=""
+    if ! kill -s 0 "$PID" 2>/dev/null; then defunct="(PID MISSING)"; fi
+    x="$(singularity instance list "$instancename" | wc -l)"
+    if [ "$x" -lt 2 ]; then defunct="(INSTANCE MISSING)"; fi
+    printf "$fmt" "$PID" "$instancename" "$address" "$defunct"
+  done
+}
+
+
+rstudio_passwd(){
+  "$thisdir/cexec" rstudio-passwd | tail -n1 > "$thisdir/.rstudio-passwd"
+}
+
+make_temp(){
+  local tmpdir="$(mktemp -d -t rstudio-XXXXXXXX)"
+  # We delete this directory afterwards, so its important that $tmpdir
+  # really has the path to an empty, temporary dir, and nothing else!
+  # (for example empty string or home dir)
+  if [[ ! "$tmpdir" || ! -d "$tmpdir" ]]; then
+    echo "Error: Could not create temp dir $tmpdir"
+    exit 1
+  fi
+  
+  # check if temp dir is empty
+  tmpcontent="$(ls -A "$tmpdir")"
+  if [ ! -z "$tmpcontent" ]; then
+    echo "Error: Temp dir '$tmpdir' is not empty"
+    exit 1
+  fi
+  echo "$tmpdir"
+}
+
+start(){
+  logfile="/dev/null"
+  if [ "${1-}" = "--log" ]; then 
+    logfile="$2"
+    msg "logging to $logfile"
+  fi
+
+  if [[ ! -e "$thisdir/.rstudio-passwd" || 
+    "$(cat "$thisdir/.rstudio-passwd" | wc -l)" = 0 ]]; then
+    cat <<EOF
+  
+  You need to set a password for RStudio first! You can do this at any time
+  by calling ./cexec rstudio-passwd
+  
+EOF
+    echo -n "Do you want to set the RStudio password now? [y/N] " >&2
+    read answer
+    if [[ $answer =~ [yY] ]]; then
+      rstudio_passwd
+    else
+      exit 1
+    fi
+  fi
+  
+  # Create a temporary directory
+  tmpdir="$(make_temp)"
+  
+  #port=$("$thisdir/cexec" find_port "$host" "$port_min" "$port_max")
+  port=$("$thisdir/find_port" "$host" "$port_min" "$port_max")
+  msg ""
+  msg "Access RStudio Server on http://$host:$port"
+  msg ""
+  msg "To log in to RStudio, use your user name and the"
+  msg "RStudio password for this project."
+  msg "Call './rstudio passwd' to change the RStudio password."
+  
+  # Start Singularity instance
+  instancename="$(basename "$tmpdir")"
+  mkdir -p "$DIR_RUN"
+  runfile="$DIR_RUN/${instancename}.pid"
+  echo PID=$$
+
+  (
+    singularity instance start \
+      --contain \
+      -W "$tmpdir" \
+      -H "$thisdir:$MOUNT_PROJECT" \
+      "$CONTAINER" \
+      "$instancename"
+    
+    # Delete the temporary directory after the end of the script
+    cleanup(){
+      singularity instance stop "$instancename"
+      rm -rf "$tmpdir"
+      if [ -f "$runfile" ]; then rm "$runfile"; fi
+    }
+    trap cleanup EXIT
+    trap "echo caught SIGHUP" HUP
+    
+    # Save PID and other infos
+    pid=$BASHPID
+    cat <<EOF >"$runfile"
+$pid
+$instancename
+$host:$port
+EOF
+  
+    # log error code
+    set +e 
+
+    RSTUDIO_PASSWORD_FILE="$MOUNT_PROJECT/.rstudio-passwd" \
+    singularity exec \
+      --pwd "$MOUNT_PROJECT" \
+      "instance://$instancename" \
+        rserver \
+        --www-address $host \
+        --www-port $port \
+        --auth-none 0 \
+        --auth-pam-helper rstudio_auth_file
+    code=$?
+    if [ ! $code = 0 ]; then
+      msg "rserver exited with code $code"
+    fi
+    return $code
+
+    ) </dev/null &>"$logfile" &
+    disown $!
+  
+}
+
+
+if [ $# = 0 ]; then
+  msg "Listing active RStudio sessions per default, use --help for more info"
+  cmd="list";
+else
+  cmd="$1"
+  shift
+fi
+
+case $cmd in 
+  list)   list; ;;
+  start)  start "$@"; ;;
+  passwd) rstudio_passwd; ;;
+  --help) help; ;;
+  *) msg "Unknown argument. Use --help to show the help for this command"
+esac
+
+
