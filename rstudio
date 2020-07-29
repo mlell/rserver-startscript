@@ -3,7 +3,7 @@ set -ue
 
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
 
-CONTAINER="$thisdir/../rstudio_1.3.1056_200729.sif"
+CONTAINER="$thisdir/rstudio.sif"
 MOUNT_PROJECT="/proj"
 DIR_RUN="$thisdir/.run"
 

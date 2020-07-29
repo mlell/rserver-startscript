@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Execute a command in the container
 set -ue
+thisdir="$(dirname "${BASH_SOURCE[0]}")"
 
+CONTAINER="$thisdir/rstudio.sif"
 MOUNT_PROJECT="/proj"
 
 if [ "${1-}" = "--help" ]; then 
@@ -16,14 +18,11 @@ EOF
 exit 0
 fi
 
-thisdir="$(dirname "${BASH_SOURCE[0]}")"
-container="rstudio_1.3.1056_200729.sif"
-
 
 singularity exec \
   --pwd "$MOUNT_PROJECT" \
   -H "$thisdir:$MOUNT_PROJECT" \
-  "$container" \
+  "$CONTAINER" \
   "$@"
 
 
