@@ -121,6 +121,7 @@ EOF
     singularity instance start \
       --contain \
       -W "$tmpdir" \
+      -B "$tmpdir:/var/run" \
       -H "$thisdir:$MOUNT_PROJECT" \
       "$CONTAINER" \
       "$instancename"
