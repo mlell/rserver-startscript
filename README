@@ -14,6 +14,10 @@ RStudio Server is included in the file [README.RStudio](README.RStudio).
 
 -------------------------------------------------------------------------------
 
+This is an **example README file, aimed at someone who is inspecting your 
+project**! It does not contain the full instructions to set up the software 
+for your project. Follow the other guides published in your working group.
+
 Computation environment
 ======================
 
@@ -41,33 +45,26 @@ time:
 
     If you have another proxy, check the cURL manual to see which environment 
     variables you have to set.
-	
- 3. To run R in the command line or to run a script, follow the next two 
-    sections. To start RStudio Server, which is useful for developing and
-    debugging, continue with section "First start of RStudio Server".
 
-Start an R session
-==================
+Start programs from the container
+=================================
 
-Use the script `cexec` to start R. Open a shell, change working directory to
-the project folder and type 
+The script `./cexec` can be used to launch any program that is included in the
+container, like python or bash. Just append the program call to `./cexec`.
 
-    ./cexec R
+Any program that is started in this way sees sees your project files under the
+path `/proj`. You cannot access any files that are outside of the project 
+folder. This behaviour is intended to increase the reproducibility of your work.
+If something is needed for the computation, it should be included in the project
+folder.
 
-Again, do not forget that R sees your project files under the path `/proj`.
+Example uses:
 
-Execute R scripts
-=================
-
-The container for this project includes RStudio as well as bare-bone R. 
-Follow the steps in this section if you want to execute R 
-without running RStudio. You don't have to do this if you want to run RStudio 
-and run an R script from there. 
-In RStudio, just use the normal R and Rscript calls. See below on how to prepare
-and start RStudio. 
+  * `./cexec R`: Start an interactive R session
+  * `./cexec Rscript example.R`: Execute an R script non-interactively
+  * `./cexec bash script.sh`: Execute a bash script
+  * `./cexec python script.py`: Execute a Python 3 script
+  * `./cexec make`: Run the Makefile of your project (if you have one)
  
-Open a shell. You can run R scripts with the help of `./cexec`, that you find 
-in the same folder as this README. For example, to run an R script called `example.R`:
 
-    ./cexec Rscript example.R
 
