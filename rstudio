@@ -118,13 +118,17 @@ EOF
   instancename="$(basename "$tmpdir")"
   mkdir -p "$DIR_RUN"
   runfile="$DIR_RUN/${instancename}.pid"
+  rundir="$DIR_RUN/${instancename}.rstudio"
   echo PID=$$
+
+  mkdir "$rundir"
 
   (
     singularity instance start \
       --contain \
       -W "$tmpdir" \
       -B "$tmpdir:/var/run" \
+      -B "$rundir:/proj/.rstudio" \
       -H "$thisdir:$MOUNT_PROJECT" \
       "$CONTAINER" \
       "$instancename"
@@ -133,6 +137,7 @@ EOF
     cleanup(){
       singularity instance stop "$instancename"
       rm -rf "$tmpdir"
+      rm -rf "$rundir"
       if [ -f "$runfile" ]; then rm "$runfile"; fi
     }
     trap cleanup EXIT
