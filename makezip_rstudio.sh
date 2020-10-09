@@ -2,7 +2,7 @@
 set -ue
 
 if [ ! $# = 1 ]; then
-  echo "Usage: makezip_r.sh SIF-FILE" >&2
+  echo "Usage: makezip_rstudio.sh SIF-FILE" >&2
   exit 1
 fi
 if [ ! -f $1 ]; then
