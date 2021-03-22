@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -ue -o noclobber
+
+THISDIR="$(dirname "${BASH_SOURCE[0]}")"
+
+SCRIPTS=("cexec" "rstudio" "shell")
+
+for x in "${SCRIPTS[@]}"; do
+  
+  cat > "$x" << EOF
+#!/usr/bin/env bash
+source "$THISDIR/$x"
+EOF
+chmod u+x "$x"
+
+
+done
+
