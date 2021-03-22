@@ -2,14 +2,14 @@
 set -ue
 
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
+source "${thisdir}/common"
 
-CONTAINER="$thisdir/rstudio.sif"
-MOUNT_PROJECT="/proj"
-DIR_RUN="$thisdir/.run"
+DIR_RUN="$PWD/.run"
 
 address="127.0.0.1"
 port_min=8000
 port_max=8100
+
 
 help(){
   cat <<EOF
@@ -56,7 +56,7 @@ list(){
 
 
 rstudio_passwd(){
-  "$thisdir/cexec" /usr/lib/rstudio-server/bin/rstudio_passwd "$@"
+  "$PWD/cexec" /usr/lib/rstudio-server/bin/rstudio_passwd "$@"
 }
 
 make_temp(){
@@ -85,8 +85,12 @@ start(){
     msg "logging to $logfile"
   fi
 
-  if [[ ! -e "$thisdir/.rstudio-passwd" || 
-    "$(cat "$thisdir/.rstudio-passwd" | wc -l)" = 0 ]]; then
+  if [ ! -d "$package_lib" ]; then
+    mkdir "$package_lib"
+  fi
+
+  if [[ ! -e "$PWD/.rstudio-passwd" || 
+    "$(cat "$PWD/.rstudio-passwd" | wc -l)" = 0 ]]; then
     cat <<EOF
   
   You need to set a password for RStudio first! You can do this at any time
@@ -128,8 +132,8 @@ EOF
       --contain \
       -W "$tmpdir" \
       -B "$tmpdir:/var/run" \
-      -B "$rundir:/proj/.rstudio" \
-      -H "$thisdir:$MOUNT_PROJECT" \
+      -B "$rundir:$MOUNT_PROJECT/.rstudio" \
+      "${ARGS_INSTANCE[@]}" \
       "$CONTAINER" \
       "$instancename"
     
@@ -157,8 +161,9 @@ EOF
     set +e 
 
     RSTUDIO_PASSWORD_FILE="$MOUNT_PROJECT/.rstudio-passwd" \
+    R_LIBS_SITE="$MOUNT_PKGS" \
     singularity exec \
-      --pwd "$MOUNT_PROJECT" \
+      "${ARGS_EXEC[@]}" \
       "instance://$instancename" \
         rserver \
         --www-address $address \
@@ -176,6 +181,12 @@ EOF
   
 }
 
+# Basic test whether the current directory is the project dir
+# should have a script named "rstudio" that calls this script
+if [ ! -f "rstudio" ]; then
+  echo "Error: Please call this script from your project directory" >&2
+  exit 1
+fi
 
 if [ $# = 0 ]; then
   msg "Listing active RStudio sessions per default, use --help for more info"

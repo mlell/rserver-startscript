@@ -1,0 +1,29 @@
+# This file is sourced by other scripts that launch the container
+# It provides common settings for a project using this containers
+
+CONTAINER="$thisdir/rstudio.sif"
+MOUNT_PROJECT="/proj"
+MOUNT_PKGS="/r-pkgs"
+
+container_dir="$(dirname "$CONTAINER")"
+package_lib="$container_dir/r-pkgs"
+
+bind_paths=()
+if [ -f "EXTERNAL_FILES" ]; then
+  readarray bind_paths < "EXTERNAL_FILES"
+fi
+
+ARGS_INSTANCE=(
+  -H "$PWD:$MOUNT_PROJECT"
+  -B "$package_lib:$MOUNT_PKGS"
+)
+
+for i in ${!bind_paths[@]}; do
+  ARGS_INSTANCE+=(-B "${bind_paths[$i]}")
+done
+
+ARGS_EXEC=(
+  --cleanenv
+  --pwd "$MOUNT_PROJECT" 
+)
+

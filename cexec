@@ -2,9 +2,9 @@
 # Execute a command in the container
 set -ue
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
+echo "thisdir=$thisdir"
+source "${thisdir}/common"
 
-CONTAINER="$thisdir/rstudio.sif"
-MOUNT_PROJECT="/proj"
 
 if [ "${1-}" = "--help" ]; then 
 echo <<EOF
@@ -18,10 +18,16 @@ EOF
 exit 0
 fi
 
+# Basic test whether the current directory is the project dir
+# should have a script named "cexec" that calls this script
+if [ ! -f "cexec" ]; then
+  echo "Error: Please call this script from your project directory" >&2
+  exit 1
+fi
 
 singularity exec \
-  --pwd "$MOUNT_PROJECT" \
-  -H "$thisdir:$MOUNT_PROJECT" \
+  "${ARGS_INSTANCE[@]}" \
+  "${ARGS_EXEC[@]}" \
   "$CONTAINER" \
   "$@"
 
