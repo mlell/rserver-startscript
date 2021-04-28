@@ -4,12 +4,11 @@ set -ue
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
 source "${thisdir}/common"
 
-DIR_RUN="$PWD/.run"
+DIR_RUN=".run"
 
 address="127.0.0.1"
 port_min=8000
 port_max=8100
-
 
 help(){
   cat <<EOF
@@ -56,7 +55,7 @@ list(){
 
 
 rstudio_passwd(){
-  "$PWD/cexec" /usr/lib/rstudio-server/bin/rstudio_passwd "$@"
+  "./cexec" /usr/lib/rstudio-server/bin/rstudio_passwd "$@"
 }
 
 make_temp(){
@@ -85,12 +84,8 @@ start(){
     msg "logging to $logfile"
   fi
 
-  if [ ! -d "$package_lib" ]; then
-    mkdir "$package_lib"
-  fi
-
-  if [[ ! -e "$PWD/.rstudio-passwd" || 
-    "$(cat "$PWD/.rstudio-passwd" | wc -l)" = 0 ]]; then
+  if [[ ! -e ".rstudio-passwd" || 
+    "$(cat ".rstudio-passwd" | wc -l)" = 0 ]]; then
     cat <<EOF
   
   You need to set a password for RStudio first! You can do this at any time
@@ -124,15 +119,14 @@ EOF
   runfile="$DIR_RUN/${instancename}.pid"
   rundir="$DIR_RUN/${instancename}.rstudio"
   echo PID=$$
-
+  
   mkdir "$rundir"
 
   (
     singularity instance start \
-      --contain \
       -W "$tmpdir" \
       -B "$tmpdir:/var/run" \
-      -B "$rundir:$MOUNT_PROJECT/.rstudio" \
+	    -B "$rundir:$MOUNT_PROJECT/.rstudio" \
       "${ARGS_INSTANCE[@]}" \
       "$CONTAINER" \
       "$instancename"
@@ -141,7 +135,7 @@ EOF
     cleanup(){
       singularity instance stop "$instancename"
       rm -rf "$tmpdir"
-      rm -rf "$rundir"
+	    rm -rf "$rundir"
       if [ -f "$runfile" ]; then rm "$runfile"; fi
     }
     trap cleanup EXIT
@@ -160,8 +154,7 @@ EOF
     # log error code
     set +e 
 
-    RSTUDIO_PASSWORD_FILE="$MOUNT_PROJECT/.rstudio-passwd" \
-    R_LIBS_SITE="$MOUNT_PKGS" \
+    SINGULARITYENV_RSTUDIO_PASSWORD_FILE="$MOUNT_PROJECT/.rstudio-passwd" \
     singularity exec \
       "${ARGS_EXEC[@]}" \
       "instance://$instancename" \
@@ -169,6 +162,7 @@ EOF
         --www-address $address \
         --www-port $port \
         --auth-none 0 \
+        --server-daemonize=no \
         --auth-pam-helper rstudio_auth_file
     code=$?
     if [ ! $code = 0 ]; then

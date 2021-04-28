@@ -3,19 +3,17 @@
 
 CONTAINER="$thisdir/rstudio.sif"
 MOUNT_PROJECT="/proj"
-MOUNT_PKGS="/r-pkgs"
-
-container_dir="$(dirname "$CONTAINER")"
-package_lib="$container_dir/r-pkgs"
+EXTERNAL="EXTERNAL" # File that contains links to extenal files/dirs
 
 bind_paths=()
-if [ -f "EXTERNAL_FILES" ]; then
-  readarray bind_paths < "EXTERNAL_FILES"
+if [ -f "$EXTERNAL" ]; then
+  readarray bind_paths <<<\
+    "$(grep -v '^#' "$EXTERNAL" | grep -v '^\s*$' )"
 fi
 
 ARGS_INSTANCE=(
-  -H "$PWD:$MOUNT_PROJECT"
-  -B "$package_lib:$MOUNT_PKGS"
+  --contain
+  -H "$thisdir:$MOUNT_PROJECT"
 )
 
 for i in ${!bind_paths[@]}; do

@@ -2,7 +2,6 @@
 # Execute a command in the container
 set -ue
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
-echo "thisdir=$thisdir"
 source "${thisdir}/common"
 
 
