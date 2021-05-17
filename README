@@ -6,65 +6,7 @@ These scripts can be deployed with the containers
 [mlell/singularity-r](https://bitbucket.org/mlell/singularity-r) and 
 [mlell/singularity-rstudio](https://bitbucket.org/mlell/singularity-rstudio).
 
-The following text can be used as an example README for the projects where
-these scripts are used.
-
-When RStudio is included in the container, additional information about running
-RStudio Server is included in the file [README.RStudio](README.RStudio).
-
--------------------------------------------------------------------------------
-
-This is an **example README file, aimed at someone who is inspecting your 
-project**! It does not contain the full instructions to set up the software 
-for your project. Follow the other guides published in your working group.
-
-Computation environment
-======================
-
-This project contains the computation environment where it was created in as
-a Singularity container. Therefore, it can be run anywhere Singularity is
-installed without further dependencies.
-
-Inside the container, this project folder is available under the path `/proj`.
-Therefore, the paths are independent from the machine.
-
-First run of the project
-========================
-
-These steps are nessecary when you want to work with this project for the first
-time:
-
- 1. When using AsReml 3: Copy your asreml.lic file into the project root
-
- 2. If you are behind a proxy server, create a file named `.Renviron`. On 
-    Windows, take care that the file doesn't get a `.txt` file extension. Save
-	  the the needed environment variables. For example, for a HTTP proxy:
-
-        http_proxy="http://proxy.example.com:3128"
-        https_proxy="http://proxy.example.com:3128"
-
-    If you have another proxy, check the cURL manual to see which environment 
-    variables you have to set.
-
-Start programs from the container
-=================================
-
-The script `./cexec` can be used to launch any program that is included in the
-container, like python or bash. Just append the program call to `./cexec`.
-
-Any program that is started in this way sees sees your project files under the
-path `/proj`. You cannot access any files that are outside of the project 
-folder. This behaviour is intended to increase the reproducibility of your work.
-If something is needed for the computation, it should be included in the project
-folder.
-
-Example uses:
-
-  * `./cexec R`: Start an interactive R session
-  * `./cexec Rscript example.R`: Execute an R script non-interactively
-  * `./cexec bash script.sh`: Execute a bash script
-  * `./cexec python script.py`: Execute a Python 3 script
-  * `./cexec make`: Run the Makefile of your project (if you have one)
- 
-
+See the readme files [README.R.txt](README.R.txt) and
+[README.RStudio.txt](README.Rstudio.txt) for information on how to use the 
+container.
 
