@@ -1,0 +1,36 @@
+# This file contains settings for the singuarity container and 
+# lists all external files that are nessecary for the project.
+# 
+# This is a bash file that is source'd from other scripts in this directory
+# which start the container.
+#
+# Location of the container
+# ========================
+#
+# This gives the directory of the Singularity Image File. Use a relative path
+# to refer to a file within the project folder (this folder) or use an
+# absolute path to refer to a folder outside.
+
+CONTAINER_DIR=.
+
+#
+# External folders or files
+# =========================
+#
+# For each file or folder that shall be available inside the container, write
+# an entry in the array below that consists of two paths, separated by a colon
+# (:).  The path before the colon is the file name outside of the container,
+# the path after the colon is where the file shall be visible from inside the
+# container. The path inside the container can be chosen freely. Do not use
+# spaces around the colon.
+#
+EXTERNAL=(
+#   "/home/user/data/table1.csv:/ext/data/table1.csv"
+#   "/home/user/data:/ext/data"
+)
+
+
+# It is not recommended to just include the whole home directory, because
+# then you don't know which files are nessecary for your analysis. Only
+# include files you actually need to improve the reproducibility.
+

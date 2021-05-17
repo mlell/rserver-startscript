@@ -24,10 +24,10 @@ if [ ! -f "cexec" ]; then
   exit 1
 fi
 
+
 singularity exec \
   "${ARGS_INSTANCE[@]}" \
   "${ARGS_EXEC[@]}" \
   "$CONTAINER" \
   "$@"
-
 

@@ -3,16 +3,35 @@ set -ue -o noclobber
 
 THISDIR="$(dirname "${BASH_SOURCE[0]}")"
 
-SCRIPTS=("cexec" "rstudio" "shell")
+COPY=("container_settings" "README.R.txt" "README.RStudio.txt")
+LINK=("cexec" "rstudio" "shell")
 
-for x in "${SCRIPTS[@]}"; do
-  
-  cat > "$x" << EOF
+for x in "${LINK[@]}"; do
+  echo "Creating file '$x'...">&2  
+  cat > "$x" << 'EOF'
 #!/usr/bin/env bash
-source "$THISDIR/$x"
+THISDIR="$(dirname "${BASH_SOURCE[0]}")"
+COMMAND="$(basename "${BASH_SOURCE[0]}")"
+source "$THISDIR/container_settings"
+source "$CONTAINER_DIR/$COMMAND"
 EOF
 chmod u+x "$x"
 
-
 done
+
+for x in "${COPY[@]}"; do
+  cp -n "$THISDIR/$x" .
+  echo "Creating file '$x'...">&2  
+done
+
+# Set the container path
+sed -i "s|CONTAINER_DIR=.|CONTAINER_DIR=\"$THISDIR\"|" container_settings
+
+cat <<EOF >&2
+
+The project directory is set up. Read the files starting with README... for
+further information
+
+EOF
+
 

@@ -1,23 +1,17 @@
 # This file is sourced by other scripts that launch the container
 # It provides common settings for a project using this containers
 
-CONTAINER="$thisdir/rstudio.sif"
 MOUNT_PROJECT="/proj"
-EXTERNAL="EXTERNAL" # File that contains links to extenal files/dirs
-
-bind_paths=()
-if [ -f "$EXTERNAL" ]; then
-  readarray bind_paths <<<\
-    "$(grep -v '^#' "$EXTERNAL" | grep -v '^\s*$' )"
-fi
+CONTAINER="$CONTAINER_DIR/rstudio.sif"
 
 ARGS_INSTANCE=(
   --contain
-  -H "$thisdir:$MOUNT_PROJECT"
+  -H ".:$MOUNT_PROJECT"
 )
 
-for i in ${!bind_paths[@]}; do
-  ARGS_INSTANCE+=(-B "${bind_paths[$i]}")
+for i in ${!EXTERNAL[@]}; do
+  echo "DIR: ${EXTERNAL[$i]}"
+  ARGS_INSTANCE+=(-B "${EXTERNAL[$i]}")
 done
 
 ARGS_EXEC=(
