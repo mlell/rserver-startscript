@@ -22,6 +22,7 @@ start  Start a new RStudio server session.
 list   Show the running sessions.
 stop   Stop a running RStudio server instance.
 passwd Set the password to access RStudio.
+shell  Start a bash shell in the given running instance
 --help Show this help.
 
 EOF
@@ -86,8 +87,9 @@ stop(){
     msg "use --help for more info."
     exit 1
   fi
-  id="$1"
-  pidfile="$DIR_RUN/rstudio-${id}.pid"
+  local id pidfile PID instancename address hostname
+  local id="$1"
+  local pidfile="$DIR_RUN/rstudio-${id}.pid"
   if [ ! -f "$pidfile" ]; then 
     msg ""
     msg "RStudio instance with ID '$id' not found. Run ./rstudio list"
@@ -108,6 +110,10 @@ stop(){
   fi
 
   singularity instance stop "$instancename"
+}
+
+shell(){
+
 }
 
 
