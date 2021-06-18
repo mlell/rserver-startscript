@@ -81,15 +81,12 @@ list(){
   done
 }
 
-stop(){
-  if [ ! $# = 1 ]; then
-    msg "Usage: rstudio stop <ID>"
-    msg "use --help for more info."
-    exit 1
-  fi
-  local id pidfile PID instancename address hostname
-  local id="$1"
-  local pidfile="$DIR_RUN/rstudio-${id}.pid"
+# Returns values by SETTING GLOBAL VARIABLES:
+#   id, pidfile, PID, instancename, address, hostname
+#
+get_instance_by_id(){
+  id="$1"
+  pidfile="$DIR_RUN/rstudio-${id}.pid"
   if [ ! -f "$pidfile" ]; then 
     msg ""
     msg "RStudio instance with ID '$id' not found. Run ./rstudio list"
@@ -108,12 +105,53 @@ stop(){
     msg ""
     exit 1
   fi
+}
+
+stop(){
+
+  if [ "${1-}" == "--help" ]; then
+    msg "Usage: rstudio stop <ID>"
+    msg ""
+    msg "Stop the RStudio instance given by <ID>."
+    msg "Run './rstudio list' to get a list of all running instances"
+    msg "and their IDs."
+    msg ""
+    exit 0
+  fi
+
+  if [ ! $# = 1 ]; then
+    msg "Usage: rstudio stop <ID>"
+    msg "use --help for more info."
+    exit 1
+  fi
+
+  get_instance_by_id "$1"
 
   singularity instance stop "$instancename"
 }
 
 shell(){
 
+  if [ "${1-}" == "--help" ]; then
+    msg "Usage: rstudio shell <ID>"
+    msg ""
+    msg "In the running RStudio container with ID <ID>, launch an"
+    msg "interactive bash shell (bash -l)."
+    msg "Run './rstudio list' to get a list of all running instances"
+    msg "and their IDs."
+    msg ""
+    exit 0
+  fi
+
+  if [ ! $# = 1 ]; then
+    msg "Usage: rstudio shell <ID>"
+    msg "use --help for more info."
+    exit 1
+  fi
+
+  get_instance_by_id "$1"
+
+  singularity exec "instance://$instancename" bash -l
 }
 
 
@@ -274,6 +312,7 @@ case $cmd in
   start)  start "$@"; ;;
   stop)   stop "$@"; ;;
   passwd) rstudio_passwd; ;;
+  shell)  shell "$@"; ;;
   --help) help; ;;
   *) msg "Unknown argument. Use --help to show the help for this command"
 esac
