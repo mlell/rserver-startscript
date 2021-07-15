@@ -19,7 +19,10 @@ Manage RStudio Server sessions in this folder.
 Commands:
 list   Show the running sessions. This is the default action.
 start  Start a new RStudio server session.
+stop   Stop a running RStudio server instance.
 passwd Set the password to access RStudio.
+shell  Start a bash shell in the given running instance
+--help Show this help.
 
 To stop a running RStudio session, use 'rstudio list' to find the
 PID and then call 'kill PID', (replacing PID)
@@ -32,15 +35,36 @@ msg(){
 }
 
 list(){
+  local verbose=
+  while [ $# -gt 0 ]; do
+    c="$1"
+    if [ "$c" = "-v" ]; then
+      local verbose="yes"
+      shift 1
+    else
+      msg "Wrong usage of 'list' command, see ./rstudio --help"
+      exit 1
+    fi
+  done
+
   shopt -s nullglob
   pidfiles=("$DIR_RUN"/rstudio-*.pid)
+  shopt -u nullglob
   if [ ${#pidfiles[@]} = 0 ]; then
-    msg "No RStudio sessions running in this directory."
+    msg "\nNo RStudio sessions running in this directory.\n"
     return 0
   fi
-  local fmt="%6s %16s %20s %20s %s\n"
-  printf "$fmt" "PID" "instance" "address" "hostname" ""
+  
+  if [ "$verbose" = "yes" ]; then
+    local fmt="%2s %6s %16s %20s %20s %s\n"
+    printf "$fmt" "ID" "PID" "instance" "address" "hostname" ""
+  else
+    local fmt="%2s %20s %20s %s\n"
+    printf "$fmt" "ID" "address" "hostname" ""
+  fi
   for f in "${pidfiles[@]}"; do
+    id="${f:${#DIR_RUN}:-4}" # strip off directory name and ".pid"
+    id="${id:9}" # strip off "/rstudio-"
     { read PID; read instancename; read address; read hostname; } < "$f"
     defunct=""
     # If the instance runs on this machine, test if it is functional
@@ -49,12 +73,95 @@ list(){
       x="$(singularity instance list "$instancename" | wc -l)"
       if [ "$x" -lt 2 ]; then defunct="(INSTANCE MISSING)"; fi
     fi
-    printf "$fmt" "$PID" "$instancename" "$address" "$hostname" "$defunct"
+
+    if [ "$verbose" = "yes" ]; then 
+      printf "$fmt" "$id" "$PID" "$instancename" "$address" "$hostname" "$defunct"
+    else
+      printf "$fmt" "$id" "$address" "$hostname" "$defunct"
+    fi
   done
+}
+
+# Returns values by SETTING GLOBAL VARIABLES:
+#   id, pidfile, PID, instancename, address, hostname
+#
+get_instance_by_id(){
+  id="$1"
+  pidfile="$DIR_RUN/rstudio-${id}.pid"
+  if [ ! -f "$pidfile" ]; then 
+    msg ""
+    msg "RStudio instance with ID '$id' not found. Run ./rstudio list"
+    msg "for a list of running instances."
+    msg ""
+    exit 1
+  fi
+  { read PID; read instancename; read address; read hostname; } < "$pidfile"
+
+  # If the instance does not run on this machine, we cannot stop it
+  if [ "$(uname -n)" != "$hostname" ]; then
+    msg ""
+    msg "This instance is not running on this machine."
+    msg "%-20s %s" "This machine:" "$(uname -n)"
+    msg "%-20s %s" "Instance $id runs on:" "$hostname"
+    msg ""
+    exit 1
+  fi
+}
+
+stop(){
+
+  if [ "${1-}" == "--help" ]; then
+    msg "Usage: rstudio stop <ID>"
+    msg ""
+    msg "Stop the RStudio instance given by <ID>."
+    msg "Run './rstudio list' to get a list of all running instances"
+    msg "and their IDs."
+    msg ""
+    exit 0
+  fi
+
+  if [ ! $# = 1 ]; then
+    msg "Usage: rstudio stop <ID>"
+    msg "use --help for more info."
+    exit 1
+  fi
+
+  get_instance_by_id "$1"
+
+  singularity instance stop "$instancename"
+}
+
+shell(){
+
+  if [ "${1-}" == "--help" ]; then
+    msg "Usage: rstudio shell <ID>"
+    msg ""
+    msg "In the running RStudio container with ID <ID>, launch an"
+    msg "interactive bash shell (bash -l)."
+    msg "Run './rstudio list' to get a list of all running instances"
+    msg "and their IDs."
+    msg ""
+    exit 0
+  fi
+
+  if [ ! $# = 1 ]; then
+    msg "Usage: rstudio shell <ID>"
+    msg "use --help for more info."
+    exit 1
+  fi
+
+  get_instance_by_id "$1"
+
+  singularity exec "instance://$instancename" bash -l
 }
 
 
 rstudio_passwd(){
+  if [ ! $# = 0 ]; then
+    msg "Usage: rstudio passwd"
+    msg "use --help for more info."
+    exit 1
+  fi
   "./cexec" /usr/lib/rstudio-server/bin/rstudio_passwd "$@"
 }
 
@@ -78,6 +185,11 @@ make_temp(){
 }
 
 start(){
+  if [ ! $# = 0 ]; then
+    msg "Usage: rstudio start"
+    msg "use --help for more info."
+    exit 1
+  fi
   logfile="/dev/null"
   if [ "${1-}" = "--log" ]; then 
     logfile="$2"
@@ -89,7 +201,7 @@ start(){
     cat <<EOF
   
   You need to set a password for RStudio first! You can do this at any time
-  by calling ./cexec rstudio-passwd
+  by calling ./rstudio passwd
   
 EOF
     echo -n "Do you want to set the RStudio password now? [y/N] " >&2
@@ -114,11 +226,12 @@ EOF
   msg "Call './rstudio passwd' to change the RStudio password."
   
   # Start Singularity instance
+  local id=1
+  while [ -e "$DIR_RUN/rstudio-${id}.pid" ]; do let "id=id+1"; done
   instancename="$(basename "$tmpdir")"
   mkdir -p "$DIR_RUN"
-  runfile="$DIR_RUN/${instancename}.pid"
-  rundir="$DIR_RUN/${instancename}.rstudio"
-  echo PID=$$
+  runfile="$DIR_RUN/rstudio-$id.pid"
+  rundir="$DIR_RUN/${id}.rstudio"
   
   mkdir "$rundir"
 
@@ -183,17 +296,24 @@ if [ ! -f "rstudio" ]; then
 fi
 
 if [ $# = 0 ]; then
-  msg "Listing active RStudio sessions per default, use --help for more info"
-  cmd="list";
+  msg ""
+  msg "Available commands: "
+  msg "  list, start, stop, passwd."
+  msg ""
+  msg "Type ./rstudio --help' for more info."
+  msg ""
+  exit 1
 else
   cmd="$1"
   shift
 fi
 
 case $cmd in 
-  list)   list; ;;
+  list)   list "$@"; ;;
   start)  start "$@"; ;;
+  stop)   stop "$@"; ;;
   passwd) rstudio_passwd; ;;
+  shell)  shell "$@"; ;;
   --help) help; ;;
   *) msg "Unknown argument. Use --help to show the help for this command"
 esac
