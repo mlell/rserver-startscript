@@ -4,9 +4,8 @@ set -ue
 thisdir="$(dirname "${BASH_SOURCE[0]}")"
 source "${thisdir}/common"
 
-DIR_RUN=".run"
-
-address="127.0.0.1"
+DIR_RUN=".run/rstudio"
+ADDRESS="127.0.0.1"
 port_min=8000
 port_max=8100
 
@@ -48,87 +47,165 @@ list(){
   done
 
   shopt -s nullglob
-  pidfiles=("$DIR_RUN"/rstudio-*.pid)
+  local rundirs=("$DIR_RUN"/*.rstudio)
   shopt -u nullglob
-  if [ ${#pidfiles[@]} = 0 ]; then
+  if [ ${#rundirs[@]} = 0 ]; then
     msg "\nNo RStudio sessions running in this directory.\n"
     return 0
   fi
   
   if [ "$verbose" = "yes" ]; then
-    local fmt="%2s %6s %16s %20s %20s %s\n"
-    printf "$fmt" "ID" "PID" "instance" "address" "hostname" ""
+    local fmt="%10s %6s %16s %20s %20s %s\n"
+    printf "$fmt" "ID" "PID" "instance" "address" "hostname" "status"
   else
-    local fmt="%2s %20s %20s %s\n"
-    printf "$fmt" "ID" "address" "hostname" ""
+    local fmt="%10s %20s %20s %s\n"
+    printf "$fmt" "ID" "address" "hostname" "status"
   fi
-  for f in "${pidfiles[@]}"; do
-    id="${f:${#DIR_RUN}:-4}" # strip off directory name and ".pid"
-    id="${id:9}" # strip off "/rstudio-"
-    { read PID; read instancename; read address; read hostname; } < "$f"
-    defunct=""
+  for f in "${rundirs[@]}"; do
+    local id="${f:${#DIR_RUN}:-8}" # strip off directory name and ".pid"
+    local id="${id:1}" # strip off leading "/"
+
+    get_instance_by_id "$id"   # -> sets id, pidfile, PID, instancename, address, hostname
+
+    local status=""
+    if [ -z "$PID" ]; then
+      status="stopped"
     # If the instance runs on this machine, test if it is functional
-    if [ "$(uname -n)" = "$hostname" ]; then
-      if ! kill -s 0 "$PID" 2>/dev/null; then defunct="(PID MISSING)"; fi
-      x="$(singularity instance list "$instancename" | wc -l)"
-      if [ "$x" -lt 2 ]; then defunct="(INSTANCE MISSING)"; fi
+    elif [ "$(uname -n)" = "$hostname" ]; then
+      # 0 = valid, 1 = no such PID
+      local pid_valid="$(kill -s 0 "$PID" 2>/dev/null; echo $?; )"
+      # 1 = no instance, 2 = instance exists
+      local has_instance="$(singularity instance list "$instancename" | wc -l)"
+
+      if [ "$pid_valid" = 0 -a "$has_instance" = 2 ]; then
+        status=running;
+      elif [ "$pid_valid" = 1 -a "$has_instance" = 2 ]; then
+        status="running (BARE INSTANCE)";
+      else
+        status="CRASHED"
+      fi
+    else
+      status="unknown (other machine)"
     fi
 
     if [ "$verbose" = "yes" ]; then 
-      printf "$fmt" "$id" "$PID" "$instancename" "$address" "$hostname" "$defunct"
+      printf "$fmt" "$id" "${PID:--}" "${instancename:--}" "${address:--}" "${hostname:--}" "$status"
     else
-      printf "$fmt" "$id" "$address" "$hostname" "$defunct"
+      printf "$fmt" "$id" "${address:--}" "${hostname:--}" "$status"
     fi
   done
 }
 
+create(){
+  local id="${1-default}"
+  if [[ "$id" = ""  || "$id" =~ [^a-zA-Z0-9] ]]; then
+    msg "Container ID must be alphanumeric and not empty" 
+    exit 1
+  fi
+  local rundir="$DIR_RUN/${id}.rstudio"
+  local pidfile="$DIR_RUN/${id}.pid"
+  if [ -e "$rundir" ]; then
+    msg "Instance \"$id\" already exists. Choose a different name"
+    exit 1
+  fi
+  mkdir -p "$rundir"
+  touch "$pidfile"
+}
+
+
 # Returns values by SETTING GLOBAL VARIABLES:
-#   id, pidfile, PID, instancename, address, hostname
+#   pidfile, rundir, PID, instancename, address, hostname
 #
 get_instance_by_id(){
-  id="$1"
-  pidfile="$DIR_RUN/rstudio-${id}.pid"
-  if [ ! -f "$pidfile" ]; then 
+  local status
+  if [ "${1-}" = "-r" ]; then
+    status="running"
+    shift
+  elif [ "${1-}" = "-s" ]; then
+    status="stopped"
+    shift
+  else
+    status="any"
+  fi
+
+  local id="$1"
+  if [[ -z "$id"  || "$id" =~ [^a-zA-Z0-9] ]]; then
+    msg "Container ID must be alphanumeric and not empty" 
+    exit 1
+  fi
+  pidfile="$DIR_RUN/${id}.pid"
+  rundir="$DIR_RUN/${id}.rstudio"
+  if [ ! -d "$rundir" ]; then 
     msg ""
     msg "RStudio instance with ID '$id' not found. Run ./rstudio list"
     msg "for a list of running instances."
     msg ""
     exit 1
   fi
-  { read PID; read instancename; read address; read hostname; } < "$pidfile"
+  if [ ! -e "$pidfile" ]; then touch "$pidfile"; fi
 
-  # If the instance does not run on this machine, we cannot stop it
-  if [ "$(uname -n)" != "$hostname" ]; then
-    msg ""
-    msg "This instance is not running on this machine."
-    msg "%-20s %s" "This machine:" "$(uname -n)"
-    msg "%-20s %s" "Instance $id runs on:" "$hostname"
-    msg ""
-    exit 1
+  # Expect that "read" returns an error exit code if the pidfile is
+  # empty
+  # This needs bash>=4.2
+  declare -g PID instancename address hostname tmpdir
+  set +e
+  # Reading in each variable separately avoids splitting by whitespace
+  { read PID; read instancename; read address; read hostname; read tmpdir; } < "$pidfile"
+  set -e
+
+  if [ "$status" = "running" ]; then
+    if [ -z "$PID" ]; then
+      msg "Instance \"$id\" is not running."
+      exit 1
+    fi
+    if [ "$(uname -n)" != "$hostname" ]; then
+      msg ""
+      msg "This instance is not running on this machine."
+      msg "%-20s %s" "This machine:" "$(uname -n)"
+      msg "%-20s %s" "Instance $id runs on:" "$hostname"
+      msg ""
+      exit 1
+    fi
+
+    if ! kill -s 0 "$PID" 2>/dev/null; then
+       msg "Instance \"$id\" was terminated uncleanly. Please"
+       msg "1. Check whether the Singularity instance \"$instancename\""
+       msg "   still exists and terminate it using \"singularity instance stop\"."
+       msg "2. Remove the temporary directory \"$tmpdir\""
+       msg "3. Remove the file \"$pidfile\""
+    fi
   fi
+
+  if [ "$status" = "stopped" ]; then
+    if [ ! -z "$PID" ]; then
+      msg "Instance \"$id\" is running on $hostname, address \"$address\"."
+      exit 1
+    fi
+  fi
+
 }
 
-stop(){
-
-  if [ "${1-}" == "--help" ]; then
-    msg "Usage: rstudio stop <ID>"
-    msg ""
-    msg "Stop the RStudio instance given by <ID>."
-    msg "Run './rstudio list' to get a list of all running instances"
-    msg "and their IDs."
-    msg ""
-    exit 0
+delete(){
+  if [ "$#" == 0 -o "${1-}" == "--help" ]; then
+    msg "Usage: rstudio delete INSTANCENAME"
+    if [ "${1-}" == "--help" ]; then
+      msg
+      msg "Delete the given container instance. This removes information like"
+      msg "the list of open files or projects and unsaved files. It does not delete"
+      msg "saved code or data. Technically, this command removes the folder"
+      msg "\"$DIR_RUN/INSTANCENAME.rstudio\" and \"INSTANCENAME.pid\"."
+      msg 
+      exit 0
+    else
+      exit 1
+    fi
   fi
+  local id="${1}"
+  get_instance_by_id -s "$id"   # -> sets id, pidfile, rundir, PID, instancename, address, hostname
 
-  if [ ! $# = 1 ]; then
-    msg "Usage: rstudio stop <ID>"
-    msg "use --help for more info."
-    exit 1
-  fi
+  rm -r "$rundir"
+  rm "$pidfile"
 
-  get_instance_by_id "$1"
-
-  singularity instance stop "$instancename"
 }
 
 shell(){
@@ -150,7 +227,12 @@ shell(){
     exit 1
   fi
 
-  get_instance_by_id "$1"
+  get_instance_by_id -r "$1"  # -> sets id, pidfile, rundir, PID, instancename, address, hostname
+
+  if [ -z "$instancename" ]; then
+    msg "Instance \"$id\" is not running."
+    exit 1
+  fi
 
   singularity exec "instance://$instancename" bash -l
 }
@@ -185,16 +267,31 @@ make_temp(){
 }
 
 start(){
-  if [ ! $# = 0 ]; then
-    msg "Usage: rstudio start"
-    msg "use --help for more info."
-    exit 1
-  fi
+  
+
   logfile="/dev/null"
-  if [ "${1-}" = "--log" ]; then 
-    logfile="$2"
-    msg "logging to $logfile"
-  fi
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --log)
+        logfile="$2"
+        msg "logging to $logfile"
+        shift 2
+        ;;
+      --)
+        shift 1
+        break
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  local id="${1-default}"
+
+  get_instance_by_id -s "$id"  # -> sets id, pidfile, rundir, PID, instancename, address, hostname
+
+  msg "Starting instance \"$id\""
 
   if [[ ! -e ".rstudio-passwd" || 
     "$(cat ".rstudio-passwd" | wc -l)" = 0 ]]; then
@@ -217,23 +314,24 @@ EOF
   tmpdir="$(make_temp)"
   
   #port=$("$thisdir/cexec" find_port "$address" "$port_min" "$port_max")
-  port=$(singularity -s exec "$CONTAINER" /usr/bin/find_port "$address" "$port_min" "$port_max")
+  port=$(singularity -s exec "$CONTAINER" /usr/bin/find_port "$ADDRESS" "$port_min" "$port_max")
   msg ""
-  msg "Access RStudio Server on http://$address:$port"
+  msg "Access RStudio Server on http://$ADDRESS:$port"
   msg ""
   msg "To log in to RStudio, use your user name and the"
   msg "RStudio password for this project."
   msg "Call './rstudio passwd' to change the RStudio password."
   
   # Start Singularity instance
-  local id=1
-  while [ -e "$DIR_RUN/rstudio-${id}.pid" ]; do let "id=id+1"; done
   instancename="$(basename "$tmpdir")"
-  mkdir -p "$DIR_RUN"
-  runfile="$DIR_RUN/rstudio-$id.pid"
+  runfile="$DIR_RUN/${id}.pid"
   rundir="$DIR_RUN/${id}.rstudio"
   
-  mkdir "$rundir"
+  if [ ! -d "$rundir" ]; then
+    msg "Created new container \"$id\""
+    create "$id";
+  fi
+  mkdir -p "$rundir"
 
   (
     singularity instance start \
@@ -244,15 +342,15 @@ EOF
       "$CONTAINER" \
       "$instancename"
     
-    # Delete the temporary directory after the end of the script
+
     cleanup(){
       singularity instance stop "$instancename"
-      rm -rf "$tmpdir"
-	    rm -rf "$rundir"
-      if [ -f "$runfile" ]; then rm "$runfile"; fi
+      if [ -d "$tmpdir" ]; then rm -rf "$tmpdir"; fi
+      if [ -f "$runfile" ]; then echo > "$runfile"; fi
     }
+
     trap cleanup EXIT
-    trap "echo caught SIGHUP" HUP
+    trap "echo caught SIGHUB" HUP
     
     # Save PID and other infos
     pid=$BASHPID
@@ -260,23 +358,26 @@ EOF
     cat <<EOF >"$runfile"
 $pid
 $instancename
-$address:$port
+$ADDRESS:$port
 $hostname
+$tmpdir
 EOF
   
+    echo $$
+    echo $BASHPID
     # log error code
     set +e 
-
     SINGULARITYENV_RSTUDIO_PASSWORD_FILE="$MOUNT_PROJECT/.rstudio-passwd" \
     singularity exec \
       "${ARGS_EXEC[@]}" \
       "instance://$instancename" \
         rserver \
-        --www-address $address \
+        --www-address $ADDRESS \
         --www-port $port \
         --auth-none 0 \
         --server-daemonize=no \
         --auth-pam-helper rstudio_auth_file
+
     code=$?
     if [ ! $code = 0 ]; then
       msg "rserver exited with code $code"
@@ -287,6 +388,49 @@ EOF
     disown $!
   
 }
+
+stop(){
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+    --help)
+      msg "Usage: rstudio stop [ID]"
+      msg ""
+      msg "Stop the RStudio instance given by <ID>. If no name is given,"
+      msg "the instance name is \"default\"."
+      msg
+      msg "Run './rstudio list' to get a list of all running instances."
+      msg ""
+      exit 0
+      ;;
+    --*)
+      msg "Unknown argument \"$1\""
+      exit 1
+      ;;
+    *)
+      break 
+      ;;
+    esac
+  done
+
+
+  if [ ! "$#" -gt 0 ]; then
+    msg "Container ID is missing."
+    msg
+    msg "Usage: rstudio stop ID"
+    msg "Use \"./rstudio list\" to get a list of IDs"
+    exit 1
+  fi
+
+  local id="${1}"
+
+  get_instance_by_id -r "$1"  # -> sets id, pidfile, rundir, PID, instancename, address, hostname
+
+  # singularity instance stop "$instancename"
+  kill $PID
+
+}
+
 
 # Basic test whether the current directory is the project dir
 # should have a script named "rstudio" that calls this script
@@ -300,7 +444,7 @@ if [ $# = 0 ]; then
   msg "Available commands: "
   msg "  list, start, stop, passwd."
   msg ""
-  msg "Type ./rstudio --help' for more info."
+  msg "Type \"./rstudio --help\" for more info."
   msg ""
   exit 1
 else
@@ -314,6 +458,8 @@ case $cmd in
   stop)   stop "$@"; ;;
   passwd) rstudio_passwd; ;;
   shell)  shell "$@"; ;;
+  create) create "$@"; ;;
+  delete) delete "$@"; ;;
   --help) help; ;;
   *) msg "Unknown argument. Use --help to show the help for this command"
 esac
