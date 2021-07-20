@@ -21,7 +21,12 @@ start  Start a new RStudio server session.
 stop   Stop a running RStudio server instance.
 passwd Set the password to access RStudio.
 shell  Start a bash shell in the given running instance
+create Create a new session.
+delete Delete a session.
 --help Show this help.
+
+Show help for individual commands by appending "--help", e.g. 
+"./rstudio start --help"
 
 To stop a running RStudio session, use 'rstudio list' to find the
 PID and then call 'kill PID', (replacing PID)
@@ -58,7 +63,7 @@ list(){
     local fmt="%10s %6s %16s %20s %20s %s\n"
     printf "$fmt" "ID" "PID" "instance" "address" "hostname" "status"
   else
-    local fmt="%10s %20s %20s %s\n"
+    local fmt="%10s %20s %30s %s\n"
     printf "$fmt" "ID" "address" "hostname" "status"
   fi
   for f in "${rundirs[@]}"; do
@@ -97,6 +102,21 @@ list(){
 }
 
 create(){
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    --help) 
+      msg "Create a new session. A session has a folder in \"$DIR_RUN\" that"
+      msg "persists across restarts and contains information like the list"
+      msg "of open files or last used projects. It does not store code that"
+      msg "is written using RStudio"
+      exit 0
+      ;;
+    --*) msg "Unknown option $1"; exit 1; ;;
+    --) shift; break; ;;
+    *) break; ;;
+    esac
+  done
+
   local id="${1-default}"
   if [[ "$id" = ""  || "$id" =~ [^a-zA-Z0-9] ]]; then
     msg "Container ID must be alphanumeric and not empty" 
@@ -178,7 +198,8 @@ get_instance_by_id(){
 
   if [ "$status" = "stopped" ]; then
     if [ ! -z "$PID" ]; then
-      msg "Instance \"$id\" is running on $hostname, address \"$address\"."
+      msg "Instance \"$id\" is running on $hostname,"
+      msg "address \"$address\"."
       exit 1
     fi
   fi
@@ -189,12 +210,12 @@ delete(){
   if [ "$#" == 0 -o "${1-}" == "--help" ]; then
     msg "Usage: rstudio delete INSTANCENAME"
     if [ "${1-}" == "--help" ]; then
-      msg
+      msg ""
       msg "Delete the given container instance. This removes information like"
       msg "the list of open files or projects and unsaved files. It does not delete"
       msg "saved code or data. Technically, this command removes the folder"
       msg "\"$DIR_RUN/INSTANCENAME.rstudio\" and \"INSTANCENAME.pid\"."
-      msg 
+      msg ""
       exit 0
     else
       exit 1
@@ -268,7 +289,6 @@ make_temp(){
 
 start(){
   
-
   logfile="/dev/null"
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -277,17 +297,30 @@ start(){
         msg "logging to $logfile"
         shift 2
         ;;
-      --)
-        shift 1
-        break
-        ;;
-      *)
-        break
-        ;;
+    --help) 
+      msg "Usage: rstudio start [ID]"
+      msg "Start the given RStudio session. If a session of the given"
+      msg "name does not exist, it is created. A temporaray directory"
+      msg "is created and assigned to the session. A free port is"
+      msg "searched and printed to the screen. A singularity instance"
+      msg "is created and RStudio Server is started therein."
+      msg ""
+      msg "Options:"
+      msg "--log FILE  Write log output to this file. Default: no log"
+      msg ""
+      exit 0
+      ;;
+      --) shift; break; ;;
+      *) break; ;;
     esac
   done
 
   local id="${1-default}"
+
+  if [ ! -d "$DIR_RUN/${id}.rstudio" ]; then
+    msg "Creating instance \"$id\""
+    create "$id"
+  fi
 
   get_instance_by_id -s "$id"  # -> sets id, pidfile, rundir, PID, instancename, address, hostname
 
@@ -396,10 +429,12 @@ stop(){
     --help)
       msg "Usage: rstudio stop [ID]"
       msg ""
-      msg "Stop the RStudio instance given by <ID>. If no name is given,"
-      msg "the instance name is \"default\"."
-      msg
-      msg "Run './rstudio list' to get a list of all running instances."
+      msg "Stop the RStudio instance given by <ID>. If you did not set "
+      msg "a session name when you started RStudio the instance name is"
+      msg "probably \"default\"."
+      msg ""
+      msg "Run './rstudio list' to get a list of all running instances"
+      msg "and their IDs".
       msg ""
       exit 0
       ;;
@@ -416,8 +451,9 @@ stop(){
 
   if [ ! "$#" -gt 0 ]; then
     msg "Container ID is missing."
-    msg
+    msg ""
     msg "Usage: rstudio stop ID"
+    msg "Use \"./rstudio stop --help for help"
     msg "Use \"./rstudio list\" to get a list of IDs"
     exit 1
   fi
@@ -442,7 +478,7 @@ fi
 if [ $# = 0 ]; then
   msg ""
   msg "Available commands: "
-  msg "  list, start, stop, passwd."
+  msg "  list, start, stop, passwd, shell, create, delete."
   msg ""
   msg "Type \"./rstudio --help\" for more info."
   msg ""
